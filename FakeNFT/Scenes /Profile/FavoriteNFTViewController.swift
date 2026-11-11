@@ -5,5 +5,6 @@ final class FavoriteNFTViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         title = "Избранные NFT"
+        
     }
 }

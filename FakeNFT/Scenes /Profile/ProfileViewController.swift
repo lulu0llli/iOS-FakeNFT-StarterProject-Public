@@ -5,6 +5,8 @@ final class ProfileViewController: UIViewController, ProfileViewProtocol {
     
     private let presenter: ProfilePresenterProtocol
     
+    private var currentProfile: Profile?
+    
     private lazy var tableView: UITableView = {
         let tableView = UITableView(frame: .zero, style: .plain)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "ProfileMenuCell")
@@ -18,6 +20,11 @@ final class ProfileViewController: UIViewController, ProfileViewProtocol {
     private lazy var headerView = ProfileHeaderView()
     private let menuItems = ["Мои NFT", "Избранные NFT"]
     
+    private enum Constants {
+        static let menuRowHeight: CGFloat = 54
+    }
+    
+    // MARK: - Init
     init(presenter: ProfilePresenterProtocol) {
         self.presenter = presenter
         super.init(nibName: nil, bundle: nil)
@@ -91,8 +98,10 @@ final class ProfileViewController: UIViewController, ProfileViewProtocol {
     
     func showProfile(_ profile: Profile) {
         DispatchQueue.main.async {
+            self.currentProfile = profile
             self.headerView.configure(with: profile)
             self.updateHeaderLayout()
+            self.tableView.reloadData()
         }
     }
     
@@ -106,20 +115,23 @@ final class ProfileViewController: UIViewController, ProfileViewProtocol {
     
     func showEditScreen(with profile: Profile) {
         let editVC = EditProfileViewController(profile: profile)
+        editVC.hidesBottomBarWhenPushed = true
         editVC.onProfileUpdated = { [weak self] updatedProfile in
             self?.presenter.updateProfile(with: updatedProfile)
         }
-        let navController = UINavigationController(rootViewController: editVC)
-        present(navController, animated: true)
+        
+        navigationController?.pushViewController(editVC, animated: true)
     }
     
     func navigateToMyNFTs() {
         let myNFTVC = MyNFTViewController()
+        myNFTVC.hidesBottomBarWhenPushed = true
         navigationController?.pushViewController(myNFTVC, animated: true)
     }
     
     func navigateToFavorites() {
         let favoritesVC = FavoriteNFTViewController()
+        favoritesVC.hidesBottomBarWhenPushed = true
         navigationController?.pushViewController(favoritesVC, animated: true)
     }
 }
@@ -127,29 +139,29 @@ final class ProfileViewController: UIViewController, ProfileViewProtocol {
 // MARK: - UITableViewDataSource
 extension ProfileViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return menuItems.count
+        menuItems.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "ProfileMenuCell", for: indexPath)
         
         var content = cell.defaultContentConfiguration()
-        content.text = menuItems[indexPath.row]
+        
+        if indexPath.row == 0 {
+            let count = currentProfile?.nfts.count ?? 0
+            content.text = "\(NSLocalizedString("Profile.myNFTs", comment: "")) (\(count))"
+        } else {
+            let count = currentProfile?.likes.count ?? 0
+            content.text = "\(NSLocalizedString("Profile.favoriteNFTs", comment: "")) (\(count))"
+        }
+        
         content.textProperties.font = UIFont(name: "SFProText-Bold", size: 17) ?? .systemFont(ofSize: 17, weight: .bold)
         content.textProperties.color = UIColor(named: "YPBlack") ?? .black
         cell.contentConfiguration = content
         
-        // Создаем свою стрелочку нужного цвета
         let chevronImageView = UIImageView(image: UIImage(systemName: "chevron.right"))
         chevronImageView.tintColor = UIColor(named: "YPBlack") ?? .black
-        chevronImageView.contentMode = .scaleAspectFit
-        
-        // Ставим её как правый аксессуар и отключаем стандартный серый
         cell.accessoryView = chevronImageView
-        cell.accessoryType = .none
-        
-        // Делаем фон ячейки прозрачным, чтобы в темной теме не было белых полос
-        cell.backgroundColor = .clear
         
         return cell
     }
@@ -158,7 +170,7 @@ extension ProfileViewController: UITableViewDataSource {
 // MARK: - UITableViewDelegate
 extension ProfileViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 54 // Высота из макета
+        Constants.menuRowHeight
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {

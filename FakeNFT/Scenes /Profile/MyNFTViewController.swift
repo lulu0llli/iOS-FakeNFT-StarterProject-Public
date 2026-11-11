@@ -5,5 +5,6 @@ final class MyNFTViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         title = "Мои NFT"
+        
     }
 }

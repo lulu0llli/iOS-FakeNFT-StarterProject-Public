@@ -6,11 +6,13 @@ final class EditProfileViewController: UIViewController {
     // MARK: - Свойства
     var onProfileUpdated: ((Profile) -> Void)?
     private var profile: Profile
+    private var hasUnsavedChanges = false
     
     // MARK: - UI Элементы
     
     private lazy var scrollView: UIScrollView = {
         let scroll = UIScrollView()
+        scroll.contentInsetAdjustmentBehavior = .never
         scroll.translatesAutoresizingMaskIntoConstraints = false
         return scroll
     }()
@@ -63,7 +65,6 @@ final class EditProfileViewController: UIViewController {
     private lazy var descriptionTitleLabel: UILabel = createTitleLabel(text: "Описание")
     private lazy var websiteTitleLabel: UILabel = createTitleLabel(text: "Сайт")
     
-    // Добавляем addTarget, чтобы отслеживать ввод текста
     private lazy var nameTextField: UITextField = {
         let textField = createTextField(placeholder: "Введите имя")
         textField.addTarget(self, action: #selector(textDidChange), for: .editingChanged)
@@ -76,7 +77,6 @@ final class EditProfileViewController: UIViewController {
         return textField
     }()
     
-    // Добавляем делегат для UITextView
     private lazy var descriptionTextView: UITextView = {
         let textView = UITextView()
         textView.backgroundColor = UIColor(named: "YPBackground") ?? .systemGray6
@@ -84,12 +84,11 @@ final class EditProfileViewController: UIViewController {
         textView.font = UIFont(name: "SFProText-Regular", size: 17) ?? .systemFont(ofSize: 17)
         textView.textColor = UIColor(named: "YPBlack") ?? .black
         textView.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
-        textView.delegate = self // Делегат для отслеживания изменений
+        textView.delegate = self
         textView.translatesAutoresizingMaskIntoConstraints = false
         return textView
     }()
     
-    // ВЫТАСКИВАЕМ КНОПКУ ИЗ СТЕКА. Скрываем её по умолчанию.
     private lazy var saveButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Сохранить", for: .normal)
@@ -97,10 +96,28 @@ final class EditProfileViewController: UIViewController {
         button.titleLabel?.font = UIFont(name: "SFProText-Bold", size: 17) ?? .systemFont(ofSize: 17, weight: .bold)
         button.backgroundColor = UIColor(named: "YPBlack") ?? .black
         button.layer.cornerRadius = 16
-        button.isHidden = true // Скрыта при открытии
+        button.isHidden = true
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(didTapSave), for: .touchUpInside)
         return button
+    }()
+    
+    // 🔥 Лоадер (по макету 82x82, фон #F7F7F8, радиус 8)
+    private lazy var loadingContainerView: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor(named: "YPBackground") ?? .systemGray6
+        view.layer.cornerRadius = 8
+        view.isHidden = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+    
+    private lazy var activityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.color = UIColor(named: "YPBlack") ?? .black
+        indicator.hidesWhenStopped = true
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        return indicator
     }()
     
     // MARK: - Init
@@ -117,7 +134,6 @@ final class EditProfileViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = "Редактирование профиля"
         
         setupNavigationBar()
         setupViews()
@@ -127,11 +143,17 @@ final class EditProfileViewController: UIViewController {
     }
     
     private func setupNavigationBar() {
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithTransparentBackground()
+        
+        navigationController?.navigationBar.standardAppearance = appearance
+        navigationController?.navigationBar.scrollEdgeAppearance = appearance
+        
         let backButton = UIBarButtonItem(
             image: UIImage(systemName: "chevron.backward"),
             style: .plain,
             target: self,
-            action: #selector(dismissScreen)
+            action: #selector(didTapBackButton)
         )
         backButton.tintColor = UIColor(named: "YPBlack") ?? .black
         navigationItem.leftBarButtonItem = backButton
@@ -141,14 +163,16 @@ final class EditProfileViewController: UIViewController {
         view.addSubview(scrollView)
         scrollView.addSubview(contentStackView)
         
-        // Добавляем кнопку прямо на view, а не в стек
         view.addSubview(saveButton)
+        
+        // Добавляем лоадер
+        view.addSubview(loadingContainerView)
+        loadingContainerView.addSubview(activityIndicator)
         
         avatarContainerView.addSubview(avatarImageView)
         avatarContainerView.addSubview(cameraIconView)
         avatarWrapperView.addSubview(avatarContainerView)
         
-        // Собираем стек (без кнопки!)
         contentStackView.addArrangedSubview(avatarWrapperView)
         contentStackView.setCustomSpacing(24, after: avatarWrapperView)
         
@@ -166,18 +190,17 @@ final class EditProfileViewController: UIViewController {
         contentStackView.setCustomSpacing(8, after: websiteTitleLabel)
         contentStackView.addArrangedSubview(websiteTextField)
         
-        // Добавляем отступ внизу стека, чтобы кнопка не перекрывала поля ввода
         contentStackView.setCustomSpacing(100, after: websiteTextField)
     }
     
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             
-            contentStackView.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: 20),
+            contentStackView.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: 80),
             contentStackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 16),
             contentStackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -16),
             contentStackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -24),
@@ -204,13 +227,19 @@ final class EditProfileViewController: UIViewController {
             websiteTextField.heightAnchor.constraint(equalToConstant: 44),
             descriptionTextView.heightAnchor.constraint(equalToConstant: 132),
             
-            // ПОЗИЦИОНИРОВАНИЕ КНОПКИ ИЗ МАКЕТА (343x60, отступ 16)
             saveButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             saveButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             saveButton.heightAnchor.constraint(equalToConstant: 60),
+            saveButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             
-            // Привязываем к клавиатуре: если она открыта - кнопка над ней, если закрыта - над Safe Area
-            saveButton.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -16)
+            // Констрейнты для лоадера
+            loadingContainerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingContainerView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            loadingContainerView.widthAnchor.constraint(equalToConstant: 82),
+            loadingContainerView.heightAnchor.constraint(equalToConstant: 82),
+            
+            activityIndicator.centerXAnchor.constraint(equalTo: loadingContainerView.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: loadingContainerView.centerYAnchor)
         ])
     }
     
@@ -234,34 +263,93 @@ final class EditProfileViewController: UIViewController {
         let isWebsiteChanged = websiteTextField.text != profile.website
         let isDescriptionChanged = descriptionTextView.text != profile.description
         
-        let hasChanges = isNameChanged || isWebsiteChanged || isDescriptionChanged
+        hasUnsavedChanges = isNameChanged || isWebsiteChanged || isDescriptionChanged
         
-        // Плавно показываем или скрываем кнопку
         UIView.animate(withDuration: 0.2) {
-            self.saveButton.isHidden = !hasChanges
+            self.saveButton.isHidden = !self.hasUnsavedChanges
             self.view.layoutIfNeeded()
         }
     }
     
+    // MARK: - Сохранение
     @objc private func didTapSave() {
-        let newName = nameTextField.text?.isEmpty == false ? nameTextField.text! : profile.name
-        let newDescription = descriptionTextView.text?.isEmpty == false ? descriptionTextView.text! : profile.description
-        let newWebsite = websiteTextField.text?.isEmpty == false ? websiteTextField.text! : profile.website
+        // Прячем клавиатуру и кнопку
+        view.endEditing(true)
+        saveButton.isHidden = true
         
-        let updatedProfile = Profile(
-            id: profile.id,
-            name: newName,
-            description: newDescription,
-            website: newWebsite,
-            avatar: profile.avatar,
-            nfts: profile.nfts,
-            likes: profile.likes
-        )
+        // Показываем лоадер
+        loadingContainerView.isHidden = false
+        activityIndicator.startAnimating()
         
-        onProfileUpdated?(updatedProfile)
-        dismiss(animated: true)
+        // Имитация сетевого запроса (1.5 секунды)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self = self else { return }
+            
+            let newName = self.nameTextField.text ?? ""
+            let newDescription = self.descriptionTextView.text ?? ""
+            let newWebsite = self.websiteTextField.text ?? ""
+            
+            let finalName = newName.isEmpty ? self.profile.name : newName
+            let finalDescription = newDescription.isEmpty ? self.profile.description : newDescription
+            let finalWebsite = newWebsite.isEmpty ? self.profile.website : newWebsite
+            
+            let updatedProfile = Profile(
+                id: self.profile.id,
+                name: finalName,
+                description: finalDescription,
+                website: finalWebsite,
+                avatar: self.profile.avatar,
+                nfts: self.profile.nfts,
+                likes: self.profile.likes
+            )
+            
+            // Останавливаем лоадер
+            self.activityIndicator.stopAnimating()
+            self.loadingContainerView.isHidden = true
+            
+            // Возвращаем данные и закрываем экран
+            self.onProfileUpdated?(updatedProfile)
+            self.navigateBack()
+        }
     }
     
+    // MARK: - Выход с проверкой
+    @objc private func didTapBackButton() {
+        if hasUnsavedChanges {
+            showExitAlert()
+        } else {
+            navigateBack()
+        }
+    }
+    
+    private func showExitAlert() {
+        let alert = UIAlertController(
+            title: "Уверены,\nчто хотите выйти?",
+            message: nil,
+            preferredStyle: .alert
+        )
+        
+        let stayAction = UIAlertAction(title: "Остаться", style: .cancel)
+        
+        let exitAction = UIAlertAction(title: "Выйти", style: .default) { [weak self] _ in
+            self?.navigateBack()
+        }
+        
+        alert.addAction(stayAction)
+        alert.addAction(exitAction)
+        
+        present(alert, animated: true)
+    }
+    
+    private func navigateBack() {
+        if let navController = navigationController, navController.viewControllers.first != self {
+            navController.popViewController(animated: true)
+        } else {
+            dismiss(animated: true)
+        }
+    }
+    
+    // MARK: - Клавиатура
     private func setupKeyboardDismissGesture() {
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         tapGesture.cancelsTouchesInView = false
@@ -269,7 +357,6 @@ final class EditProfileViewController: UIViewController {
     }
     
     @objc private func dismissKeyboard() { view.endEditing(true) }
-    @objc private func dismissScreen() { dismiss(animated: true) }
     
     // MARK: - Helpers
     private func createTitleLabel(text: String) -> UILabel {
@@ -295,7 +382,7 @@ final class EditProfileViewController: UIViewController {
     }
 }
 
-// ОБЯЗАТЕЛЬНО: расширение для UITextView, чтобы отслеживать изменения в описании
+// MARK: - UITextViewDelegate
 extension EditProfileViewController: UITextViewDelegate {
     func textViewDidChange(_ textView: UITextView) {
         checkForChanges()

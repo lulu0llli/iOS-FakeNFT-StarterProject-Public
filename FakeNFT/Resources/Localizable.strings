@@ -5,3 +5,5 @@
 "Error.repeat" = "Повторить";
 "Error.title" = "Ошибка";
 "Tab.profile" = "Профиль";
+"Profile.myNFTs" = "Мои NFT";
+"Profile.favoriteNFTs" = "Избранные NFT";
